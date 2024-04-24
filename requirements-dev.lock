@@ -12,3 +12,5 @@ numpy==1.26.4
     # via opencv-python
 opencv-python==4.9.0.80
     # via billy-the-kid
+pyserial==3.5
+    # via billy-the-kid
