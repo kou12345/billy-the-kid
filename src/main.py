@@ -1,9 +1,10 @@
-from serial import Serial
+from custom_serial import CustomSerial
 import time
 
 
-serial = Serial(port="...", baudrate=9600)
+serial = CustomSerial(port="COM20", baudrate=9600)
+print(serial)
 
-serial.write("Hello, Arduino!\n")
+serial.write("123")
 time.sleep(1)
 serial.close()
