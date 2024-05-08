@@ -8,9 +8,29 @@
 #   with-sources: false
 
 -e file:.
+boto3==1.34.100
+    # via billy-the-kid
+botocore==1.34.100
+    # via boto3
+    # via s3transfer
+jmespath==1.0.1
+    # via boto3
+    # via botocore
 numpy==1.26.4
     # via opencv-python
 opencv-python==4.9.0.80
     # via billy-the-kid
+pillow==10.3.0
+    # via billy-the-kid
 pyserial==3.5
     # via billy-the-kid
+python-dateutil==2.9.0.post0
+    # via botocore
+python-dotenv==1.0.1
+    # via billy-the-kid
+s3transfer==0.10.1
+    # via boto3
+six==1.16.0
+    # via python-dateutil
+urllib3==2.2.1
+    # via botocore
