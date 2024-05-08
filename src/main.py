@@ -1,8 +1,10 @@
 from custom_serial import CustomSerial
 import time
 
+# TODO .envでportを指定したい
+port = "/dev/cu.usbmodem1401"
 
-serial = CustomSerial(port="COM20", baudrate=9600)
+serial = CustomSerial(port=port, baudrate=9600)
 print(serial)
 
 serial.write("123")
