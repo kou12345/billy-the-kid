@@ -58,7 +58,8 @@ class Camera:
                 )
 
             # 画像をファイルに書き出し
-            with open("camera.jpg", "wb") as f:
+            # file pathが同じため上書きで保存されている。 問題はない
+            with open("img/camera.jpg", "wb") as f:
                 f.write(encoded_img)
 
     def run(self):
