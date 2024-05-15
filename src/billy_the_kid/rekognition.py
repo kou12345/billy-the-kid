@@ -1,6 +1,5 @@
 import boto3
-from PIL import Image, ImageDraw, ImageFont
-
+from PIL import Image
 
 """
 Amazon Rekognition API
@@ -69,53 +68,8 @@ class Rekognition:
 
         print("Done...")
 
-    """
-    画像を表示する
-    """
-
-    def display_image(image_path: str, response):
-        image = Image.open(image_path)
-
-        # Ready image to draw bounding boxes on it.
-        imgWidth, imgHeight = image.size
-        draw = ImageDraw.Draw(image)
-
-        # calculate and display bounding boxes for each detected custom label
-        print("Detected custom labels for " + image_path)
-        for customLabel in response["CustomLabels"]:
-            print("Label " + str(customLabel["Name"]))
-            print("Confidence " + str(customLabel["Confidence"]))
-            if "Geometry" in customLabel:
-                box = customLabel["Geometry"]["BoundingBox"]
-                left = imgWidth * box["Left"]
-                top = imgHeight * box["Top"]
-                width = imgWidth * box["Width"]
-                height = imgHeight * box["Height"]
-
-                fnt = ImageFont.truetype("/Library/Fonts/Arial.ttf", 50)
-                draw.text((left, top), customLabel["Name"], fill="#00d400", font=fnt)
-
-                print("Left: " + "{0:.0f}".format(left))
-                print("Top: " + "{0:.0f}".format(top))
-                print("Label Width: " + "{0:.0f}".format(width))
-                print("Label Height: " + "{0:.0f}".format(height))
-
-                points = (
-                    (left, top),
-                    (left + width, top),
-                    (left + width, top + height),
-                    (left, top + height),
-                    (left, top),
-                )
-                draw.line(points, fill="#00d400", width=5)
-
-        image.show()
-
-    """
-    カスタムラベルを表示する
-    """
-
-    def show_custom_labels(self, model, image_path: str, min_confidence: int) -> int:
+    # 認識したカスタムラベルの座標を返す
+    def get_custom_labels(self, model, image_path: str, min_confidence: int) -> list:
         with open(image_path, "rb") as image:
             response = self.client.detect_custom_labels(
                 Image={"Bytes": image.read()},
@@ -123,8 +77,75 @@ class Rekognition:
                 ProjectVersionArn=model,
             )
 
-        print(response)
+        image = Image.open(image_path)
 
-        self.display_image(image_path, response)
+        output = []
 
-        return len(response["CustomLabels"])
+        # Ready image to draw bounding boxes on it.
+        imgWidth, imgHeight = image.size
+
+        for customLabel in response["CustomLabels"]:
+            if "Geometry" in customLabel:
+                box = customLabel["Geometry"]["BoundingBox"]
+                left = imgWidth * box["Left"]
+                top = imgHeight * box["Top"]
+                width = imgWidth * box["Width"]
+                height = imgHeight * box["Height"]
+
+                output.append(
+                    {
+                        "Name": customLabel["Name"],
+                        "Confidence": customLabel["Confidence"],
+                        "Width": width,
+                        "Height": height,
+                        "Left": left,
+                        "Top": top,
+                        "ImageWidth": imgWidth,
+                        "ImageHeight": imgHeight,
+                    }
+                )
+
+        return output
+
+
+"""
+{
+    "CustomLabels":[
+        {
+            "Name":"yellow target",
+            "Confidence":86.44400024414062,
+            "Geometry":{
+                "BoundingBox":{
+                    "Width":0.20201000571250916,
+                    "Height":0.2780799865722656,
+                    "Left":0.47442999482154846,
+                    "Top":0.6149200201034546
+                }
+            }
+        },
+        {
+            "Name":"yellow target",
+            "Confidence":80.99800109863281,
+            "Geometry":{
+                "BoundingBox":{
+                    "Width":0.18456999957561493,
+                    "Height":0.23803000152111053,
+                    "Left":0.410970002412796,
+                    "Top":0.33625999093055725
+                }
+            }
+        }
+    ],
+    "ResponseMetadata":{
+        "RequestId":"2e3934c4-6282-4b5b-8d50-40f8b68eca20",
+        "HTTPStatusCode":200,
+        "HTTPHeaders":{
+            "x-amzn-requestid":"2e3934c4-6282-4b5b-8d50-40f8b68eca20",
+            "content-type":"application/x-amz-json-1.1",
+            "content-length":"404",
+            "date":"Wed, 15 May 2024 03:45:43 GMT"
+        },
+        "RetryAttempts":0
+    }
+}
+"""
