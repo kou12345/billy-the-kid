@@ -1,19 +1,27 @@
 import boto3
 from PIL import Image
+from typing import TypedDict, List
+import logging
+import botocore.exceptions
 
-"""
-Amazon Rekognition API
-"""
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+class CustomLabelResponse(TypedDict):
+    Name: str
+    Confidence: float
+    Width: float
+    Height: float
+    Left: float
+    Top: float
+    ImageWidth: int
+    ImageHeight: int
 
 
 class Rekognition:
-
     def __init__(self):
         self.client = boto3.client("rekognition")
-
-    """
-    modelを開始する
-    """
 
     def start_model(
         self,
@@ -21,16 +29,24 @@ class Rekognition:
         model_arn: str,
         version_name: str,
         min_inference_units: int,
-    ) -> None:
-
+    ):
+        """Start the Rekognition model."""
         try:
-            # モデルを開始する
-            print("Starting model: " + model_arn)
+            # Check if the model is already running
+            describe_response = self.client.describe_project_versions(
+                ProjectArn=project_arn, VersionNames=[version_name]
+            )
+            model_status = describe_response["ProjectVersionDescriptions"][0]["Status"]
+
+            if model_status == "RUNNING":
+                logger.info(f"Model {model_arn} is already running.")
+                return
+
+            logger.info(f"Starting model: {model_arn}")
             response = self.client.start_project_version(
                 ProjectVersionArn=model_arn, MinInferenceUnits=min_inference_units
             )
 
-            # モデルが実行状態になるまで待つ
             project_version_running_waiter = self.client.get_waiter(
                 "project_version_running"
             )
@@ -38,114 +54,71 @@ class Rekognition:
                 ProjectArn=project_arn, VersionNames=[version_name]
             )
 
-            # 実行ステータスを取得する
             describe_response = self.client.describe_project_versions(
                 ProjectArn=project_arn, VersionNames=[version_name]
             )
 
             for model in describe_response["ProjectVersionDescriptions"]:
-                print("Status: " + model["Status"])
-                print("Message: " + model["StatusMessage"])
-        except Exception as e:
-            print(e)
+                logger.info(f"Status: {model['Status']}")
+                logger.info(f"Message: {model['StatusMessage']}")
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceInUseException":
+                logger.warning(f"Model {model_arn} is already running.")
+            else:
+                logger.error(f"Error starting model: {e}")
+                raise
 
-        print("Done...")
+        logger.info("Model started successfully.")
 
-    """
-    modelを停止する
-    """
+    def stop_model(self, model_arn: str):
+        """Stop the Rekognition model."""
+        logger.info(f"Stopping model: {model_arn}")
 
-    def stop_model(self, model_arn: str) -> None:
-        print("Stopping model:" + model_arn)
-
-        # モデルを停止する
         try:
             response = self.client.stop_project_version(ProjectVersionArn=model_arn)
             status = response["Status"]
-            print("Status: " + status)
-        except Exception as e:
-            print(e)
+            logger.info(f"Status: {status}")
+        except botocore.exceptions.ClientError as e:
+            logger.error(f"Error stopping model: {e}")
+            raise
 
-        print("Done...")
+        logger.info("Model stopped successfully.")
 
-    # 認識したカスタムラベルの座標を返す
-    def get_custom_labels(self, model, image_path: str, min_confidence: int) -> list:
-        with open(image_path, "rb") as image:
+    def get_custom_labels(
+        self, model, image_path: str, min_confidence: int
+    ) -> List[CustomLabelResponse]:
+        """Get the custom labels and their coordinates from the image."""
+        with open(image_path, "rb") as image_file:
             response = self.client.detect_custom_labels(
-                Image={"Bytes": image.read()},
+                Image={"Bytes": image_file.read()},
                 MinConfidence=min_confidence,
                 ProjectVersionArn=model,
             )
 
-        image = Image.open(image_path)
+        with Image.open(image_path) as image:
+            image_width, image_height = image.size
 
-        output = []
+        custom_labels = []
 
-        # Ready image to draw bounding boxes on it.
-        imgWidth, imgHeight = image.size
+        for custom_label in response["CustomLabels"]:
+            if "Geometry" in custom_label:
+                box = custom_label["Geometry"]["BoundingBox"]
+                left = image_width * box["Left"]
+                top = image_height * box["Top"]
+                width = image_width * box["Width"]
+                height = image_height * box["Height"]
 
-        for customLabel in response["CustomLabels"]:
-            if "Geometry" in customLabel:
-                box = customLabel["Geometry"]["BoundingBox"]
-                left = imgWidth * box["Left"]
-                top = imgHeight * box["Top"]
-                width = imgWidth * box["Width"]
-                height = imgHeight * box["Height"]
-
-                output.append(
+                custom_labels.append(
                     {
-                        "Name": customLabel["Name"],
-                        "Confidence": customLabel["Confidence"],
+                        "Name": custom_label["Name"],
+                        "Confidence": custom_label["Confidence"],
                         "Width": width,
                         "Height": height,
                         "Left": left,
                         "Top": top,
-                        "ImageWidth": imgWidth,
-                        "ImageHeight": imgHeight,
+                        "ImageWidth": image_width,
+                        "ImageHeight": image_height,
                     }
                 )
 
-        return output
-
-
-"""
-{
-    "CustomLabels":[
-        {
-            "Name":"yellow target",
-            "Confidence":86.44400024414062,
-            "Geometry":{
-                "BoundingBox":{
-                    "Width":0.20201000571250916,
-                    "Height":0.2780799865722656,
-                    "Left":0.47442999482154846,
-                    "Top":0.6149200201034546
-                }
-            }
-        },
-        {
-            "Name":"yellow target",
-            "Confidence":80.99800109863281,
-            "Geometry":{
-                "BoundingBox":{
-                    "Width":0.18456999957561493,
-                    "Height":0.23803000152111053,
-                    "Left":0.410970002412796,
-                    "Top":0.33625999093055725
-                }
-            }
-        }
-    ],
-    "ResponseMetadata":{
-        "RequestId":"2e3934c4-6282-4b5b-8d50-40f8b68eca20",
-        "HTTPStatusCode":200,
-        "HTTPHeaders":{
-            "x-amzn-requestid":"2e3934c4-6282-4b5b-8d50-40f8b68eca20",
-            "content-type":"application/x-amz-json-1.1",
-            "content-length":"404",
-            "date":"Wed, 15 May 2024 03:45:43 GMT"
-        },
-        "RetryAttempts":0
-    }
-}
-"""
+        return custom_labels
