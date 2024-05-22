@@ -23,14 +23,6 @@ class Camera:
             return None
         return frame
 
-    def get_frame_gray(self):
-        # カメラから1フレームを取得し、グレースケールに変換する
-        # 取得に成功した場合はグレースケールのフレームを返し、失敗した場合はNoneを返す
-        frame = self.get_frame()
-        if frame is None:
-            return None
-        return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
     def get_frame_rgb(self):
         # カメラから1フレームを取得し、RGBに変換する
         # 取得に成功した場合はRGBのフレームを返し、失敗した場合はNoneを返す
@@ -39,12 +31,15 @@ class Camera:
             return None
         return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    def process_frame(self):
+    def process_frame(self, image_path):
         ret, frame = self.read()
 
         if ret:
-            # 画像サイズを縮小 (例: 50%)
-            resized_frame = cv2.resize(frame, None, fx=0.5, fy=0.5)
+            # 画像サイズを固定 (例: 960x540)
+            fixed_size = (960, 540)
+            resized_frame = cv2.resize(
+                frame, fixed_size, fx=0, fy=0, interpolation=cv2.INTER_AREA
+            )
 
             # 縮小画像をJPEGで圧縮し4MB以下に抑える
             _, encoded_img = cv2.imencode(
@@ -58,8 +53,7 @@ class Camera:
                 )
 
             # 画像をファイルに書き出し
-            # file pathが同じため上書きで保存されている。 問題はない
-            with open("img/camera.jpg", "wb") as f:
+            with open(image_path, "wb") as f:
                 f.write(encoded_img)
 
     def run(self):
