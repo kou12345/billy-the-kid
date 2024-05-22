@@ -6,24 +6,58 @@ import time
 import os
 
 
+"""
+カメラが起動する
+撮影して画像を保存する
+推論する
+サーボモータの角度を計算する
+シリアル通信でサーボモータに角度を送信する
+
+撮影して画像を保存する
+推論する
+サーボモータの角度を計算する
+シリアル通信でサーボモータに角度を送信する
+（角度がゼロの場合は、発射する） 
+"""
+
+
 def calculate_servo_angles(
-    coordinates, image_width, image_height, actual_width, actual_height, distance
-):
+    coordinate, actual_width, actual_height, distance
+) -> tuple[float, float]:
+    """
+    物体の座標、実際の幅、高さ、距離を元に、サーボモーターの回転角度を計算する関数。
+
+    Args:
+        coordinate (dict): 物体の座標情報を持つ辞書。以下のキーを持つ:
+            - "Width" (int): 物体の幅（ピクセル単位）
+            - "Height" (int): 物体の高さ（ピクセル単位）
+            - "Left" (int): 物体の左端の座標（ピクセル単位）
+            - "Top" (int): 物体の上端の座標（ピクセル単位）
+        actual_width (float): 実際の幅（cm）
+        actual_height (float): 実際の高さ（cm）
+        distance (float): 物体までの距離（cm）
+
+    Returns:
+        tuple: サーボモーターの回転角度 (servo_angle_x, servo_angle_y)。
+            - servo_angle_x (float): 水平方向の回転角度（度数法）
+            - servo_angle_y (float): 垂直方向の回転角度（度数法）
+    """
+
     # カメラの中心座標を計算
-    center_x = image_width // 2
-    center_y = image_height // 2
+    center_x = coordinate["Width"] // 2
+    center_y = coordinate["Height"] // 2
 
     # 物体の中心座標を計算
-    object_center_x = coordinates["Left"] + coordinates["Width"] // 2
-    object_center_y = coordinates["Top"] + coordinates["Height"] // 2
+    object_center_x = coordinate["Left"] + coordinate["Width"] // 2
+    object_center_y = coordinate["Top"] + coordinate["Height"] // 2
 
     # 中心座標の差を計算
     delta_x = object_center_x - center_x
     delta_y = object_center_y - center_y
 
     # 実際のサイズとピクセル数の比率を計算
-    ratio_x = actual_width / coordinates["Width"]
-    ratio_y = actual_height / coordinates["Height"]
+    ratio_x = actual_width / coordinate["Width"]
+    ratio_y = actual_height / coordinate["Height"]
 
     # 中心座標の差を実際の距離に変換
     actual_delta_x = delta_x * ratio_x
@@ -38,8 +72,6 @@ def calculate_servo_angles(
 
 # TODO この関数を試す
 # TODO 基準距離での的のサイズを確認する
-
-
 def calculate_distance(
     reference_distance, reference_target_size_pixels, new_target_size_pixels
 ):
@@ -60,89 +92,98 @@ def calculate_distance(
 # print(f"新しい距離: {new_distance:.2f} （単位は基準距離と同じ）")
 
 
+def find_nearest_coordinate(
+    coordinates: list, actual_width: float, actual_height: float, distance: float
+):
+    """
+    与えられた座標リストの中から、実際の幅、高さ、距離を考慮して、サーボモーターの角度の合計が最小となる座標を見つける関数。
+
+    Args:
+        coordinates (list): 座標のリスト。各座標は (x, y) の形式で表される。
+        actual_width (float): 実際の幅。
+        actual_height (float): 実際の高さ。
+        distance (float): 距離。
+
+    Returns:
+        tuple: サーボモーターの角度の合計が最小となる座標。(x, y) の形式で返される。
+
+    """
+    min_angle = float("inf")
+    nearest_coordinate = None
+
+    for coordinate in coordinates:
+        servo_angle_x, servo_angle_y = calculate_servo_angles(
+            coordinate, actual_width, actual_height, distance
+        )
+        total_angle = abs(servo_angle_x) + abs(servo_angle_y)
+
+        if total_angle < min_angle:
+            min_angle = total_angle
+            nearest_coordinate = coordinate
+
+    return nearest_coordinate
+
+
 def main():
     # 環境変数
-    project_arn = os.environ["PROJECT_ARN"]
-    model_arn = os.environ["MODEL_ARN"]
-    version_name = os.environ["VERSION_NAME"]
-    min_inference_units = int(os.environ["MIN_INFERENCE_UNITS"])
+    PROJECT_ARN = os.environ["PROJECT_ARN"]
+    MODEL_ARN = os.environ["MODEL_ARN"]
+    VERSION_NAME = os.environ["VERSION_NAME"]
+    MIN_INFERENCE_UNITS = int(os.environ["MIN_INFERENCE_UNITS"])
 
-    port = "/dev/cu.usbmodem1401"
+    PORT = "/dev/cu.usbmodem1401"
+
+    ACTUAL_WIDTH = 5.0  # 推論対象の実際の高さ（cm）
+    ACTUAL_HEIGHT = 5.0  # 推論対象の実際の高さ（cm）
+    DISTANCE = 30.0  # 推論対象までの距離（cm）
+    IMAGE_PATH = "img/camera.jpg"  # 画像の保存先
+
+    MIN_CONFIDENCE = 50  # 信頼度の閾値
+
+    rekognition = Rekognition()
+    rekognition.start_model(PROJECT_ARN, MODEL_ARN, VERSION_NAME, MIN_INFERENCE_UNITS)
 
     """
     MacBookの場合、0を指定するとエラーになる。とりあえず1を指定すると動作する
     https://github.com/opencv/opencv-python/issues/916
     """
-    # camera = Camera(1)
-    # カメラを起動 画像を撮影し、保存する
-    # camera.run()
+    camera = Camera(1)
 
-    # 検出対象の画像
-    # image_path = "img/camera.jpg"
-    # image_path = "/Users/kou12345/Downloads/IMG_1161.JPG"  # 正しく表示される
-    # image_path = "/Users/kou12345/Downloads/IMG_1173.JPG"
-    image_path = "/Users/kou12345/Downloads/IMG_1159.JPG"
+    while True:
+        camera.process_frame(IMAGE_PATH)
 
-    min_confidence = 50
+        coordinates = rekognition.get_custom_labels(
+            MODEL_ARN, IMAGE_PATH, MIN_CONFIDENCE
+        )
 
-    rekognition = Rekognition()
+        # 推論結果を元にサーボモータの回転角を決定する
+        nearest_coordinate = find_nearest_coordinate(
+            coordinates, ACTUAL_WIDTH, ACTUAL_HEIGHT, DISTANCE
+        )
+        if nearest_coordinate is None:
+            print("nearest_coordinate is None")
+            return
 
-    rekognition.start_model(project_arn, model_arn, version_name, min_inference_units)
-
-    # TODO 検出を定期的に行う
-    coordinates = rekognition.get_custom_labels(model_arn, image_path, min_confidence)
-
-    print(coordinates)
-    """
-    coordinatesの値
-    [
-        {
-            "Name":"yellow target",
-            "Confidence":64.64700317382812,
-            "Width":420.65857315063477,
-            "Height":418.461138010025,
-            "Left":1387.0886764526367,
-            "Top":1562.5915517807007
-            "ImageWidth": imgWidth,
-            "ImageHeight": imgHeight,
-        }
-    ]
-    """
-
-    actual_width = 5.0  # 推論対象の実際の幅（cm）
-    actual_height = 5.0  # 推論対象の実際の高さ（cm）
-    distance = 30.0  # 推論対象までの距離（cm）
-
-    # 推論結果を元にサーボモータの回転角を決定する
-    # TODO coordinatesが複数ある場合は一番近いものを選択する
-    for coordinate in coordinates:
         servo_angle_x, servo_angle_y = calculate_servo_angles(
-            coordinate,
-            coordinate["ImageWidth"],
-            coordinate["ImageHeight"],
-            actual_width,
-            actual_height,
-            distance,
+            nearest_coordinate, ACTUAL_WIDTH, ACTUAL_HEIGHT, DISTANCE
         )
         print(f"サーボモータ回転角度: X={servo_angle_x}, Y={servo_angle_y}")
 
-        # 的までの距離を計算
-        print(
-            calculate_distance(
-                coordinate["Width"],
-                coordinate["Height"],
-                actual_width,
-                actual_height,
-                1000,
-            )
-        )
+        # serial = CustomSerial(port=port, baudrate=9600)
+        if servo_angle_x == 0 and servo_angle_y == 0:
+            print("発射します")
+            # TODO シリアル通信で発射信号を送信する
+            # serial.write("fire")
+            # time.sleep(1)
+            # serial.close()
 
-    # TODO シリアル通信で回転角を送信する
-    # serial = CustomSerial(port=port, baudrate=9600)
-
-    # serial.write("123")
-    # time.sleep(1)
-    # serial.close()
+            return
+        else:
+            print("発射しません")
+            # TODO シリアル通信で回転角を送信する
+            # serial.write(f"{servo_angle_x},{servo_angle_y})
+            # time.sleep(1)
+            # serial.close()
 
 
 if __name__ == "__main__":
