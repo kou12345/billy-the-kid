@@ -58,7 +58,7 @@ class Camera:
 
     def run(self):
         while True:
-            self.process_frame()
+            self.process_frame("output.jpg")
 
             # 'q'を押して終了
             if cv2.waitKey(1) & 0xFF == ord("q"):
