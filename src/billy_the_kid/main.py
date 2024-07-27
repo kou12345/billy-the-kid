@@ -1,4 +1,3 @@
-# camera.pyからCameraクラスをimport
 from billy_the_kid.camera import Camera
 
 """
