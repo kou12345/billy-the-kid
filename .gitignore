@@ -12,5 +12,6 @@ wheels/
 .env
 
 img/
+output.jpg
 
 .DS_Store
