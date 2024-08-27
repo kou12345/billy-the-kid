@@ -1,4 +1,6 @@
 import math
+
+import cv2
 from billy_the_kid.camera import Camera
 from billy_the_kid.rekognition import Rekognition
 from custom_serial import CustomSerial
@@ -124,6 +126,38 @@ def find_nearest_coordinate(
     return nearest_coordinate
 
 
+def draw_bounding_boxes(image_path, custom_labels):
+    # 画像を読み込む
+    image = cv2.imread(image_path)
+
+    for label in custom_labels:
+        # Bounding Boxの座標を取得
+        left = int(label["Left"])
+        top = int(label["Top"])
+        right = int(left + label["Width"])
+        bottom = int(top + label["Height"])
+
+        # Bounding Boxを描画
+        cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 2)
+
+        # ラベル名と信頼度を描画
+        label_text = f"{label['Name']}: {label['Confidence']:.2f}"
+        cv2.putText(
+            image,
+            label_text,
+            (left, top - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            (0, 255, 0),
+            2,
+        )
+
+    # 結果を保存
+    output_path = "img/output_with_boxes.jpg"
+    cv2.imwrite(output_path, image)
+    print(f"Bounding Boxesを描画した画像を保存しました: {output_path}")
+
+
 def main():
     # 環境変数
     PROJECT_ARN = os.environ["PROJECT_ARN"]
@@ -147,43 +181,45 @@ def main():
     MacBookの場合、0を指定するとエラーになる。とりあえず1を指定すると動作する
     https://github.com/opencv/opencv-python/issues/916
     """
-    camera = Camera(1)
+    camera = Camera(0)
 
     while True:
         camera.process_frame(IMAGE_PATH)
 
-        coordinates = rekognition.get_custom_labels(
+        coordinates, image_path = rekognition.get_custom_labels(
             MODEL_ARN, IMAGE_PATH, MIN_CONFIDENCE
         )
+        print(f"coordinates: {coordinates}")
 
         # 推論結果を元にサーボモータの回転角を決定する
         nearest_coordinate = find_nearest_coordinate(
             coordinates, ACTUAL_WIDTH, ACTUAL_HEIGHT, DISTANCE
         )
-        if nearest_coordinate is None:
-            print("nearest_coordinate is None")
-            return
+        draw_bounding_boxes(image_path, coordinates)
 
-        servo_angle_x, servo_angle_y = calculate_servo_angles(
-            nearest_coordinate, ACTUAL_WIDTH, ACTUAL_HEIGHT, DISTANCE
-        )
-        print(f"サーボモータ回転角度: X={servo_angle_x}, Y={servo_angle_y}")
+        if nearest_coordinate:
+            servo_angle_x, servo_angle_y = calculate_servo_angles(
+                nearest_coordinate, ACTUAL_WIDTH, ACTUAL_HEIGHT, DISTANCE
+            )
+            print(f"サーボモータ回転角度: X={servo_angle_x}, Y={servo_angle_y}")
 
-        # serial = CustomSerial(port=port, baudrate=9600)
-        if servo_angle_x == 0 and servo_angle_y == 0:
-            print("発射します")
-            # TODO シリアル通信で発射信号を送信する
-            # serial.write("fire")
-            # time.sleep(1)
-            # serial.close()
+            # serial = CustomSerial(port=port, baudrate=9600)
+            if servo_angle_x == 0 and servo_angle_y == 0:
+                print("発射します")
+                # TODO シリアル通信で発射信号を送信する
+                # serial.write("fire")
+                # time.sleep(1)
+                # serial.close()
 
-            return
+                return
+            else:
+                print("発射しません")
+                # TODO シリアル通信で回転角を送信する
+                # serial.write(f"{servo_angle_x},{servo_angle_y})
+                # time.sleep(1)
+                # serial.close()
         else:
-            print("発射しません")
-            # TODO シリアル通信で回転角を送信する
-            # serial.write(f"{servo_angle_x},{servo_angle_y})
-            # time.sleep(1)
-            # serial.close()
+            print("nearest_coordinate is None")
 
 
 if __name__ == "__main__":

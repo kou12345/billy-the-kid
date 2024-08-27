@@ -1,7 +1,7 @@
 import os
 import boto3
 from PIL import Image
-from typing import TypedDict, List
+from typing import Tuple, TypedDict, List
 import logging
 import botocore.exceptions
 
@@ -91,7 +91,7 @@ class Rekognition:
 
     def get_custom_labels(
         self, model, image_path: str, min_confidence: int
-    ) -> List[CustomLabelResponse]:
+    ) -> Tuple[List[CustomLabelResponse], str]:
         """Get the custom labels and their coordinates from the image."""
         with open(image_path, "rb") as image_file:
             response = self.client.detect_custom_labels(
@@ -126,4 +126,6 @@ class Rekognition:
                     }
                 )
 
-        return custom_labels
+        logger.info(f"Custom labels: {custom_labels}")
+
+        return custom_labels, image_path
