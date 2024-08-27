@@ -23,25 +23,6 @@ class Camera:
             logger.warning("Failed to read frame from camera")
         return ret, frame
 
-    def release(self):
-        self.cap.release()
-        logger.info("Camera resources released")
-
-    def get_frame(self):
-        ret, frame = self.read()
-        if not ret:
-            logger.warning("Failed to get frame")
-            return None
-        return frame
-
-    def get_frame_rgb(self):
-        frame = self.get_frame()
-        if frame is None:
-            return None
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        logger.debug("Frame converted to RGB")
-        return rgb_frame
-
     def process_frame(self, image_path):
         ret, frame = self.read()
 
@@ -73,22 +54,3 @@ class Camera:
             logger.info(f"Frame processed and saved to {image_path}")
         else:
             logger.warning("Failed to process frame")
-
-    def run(self):
-        logger.info("Starting camera loop")
-        frame_count = 0
-        while True:
-            self.process_frame("output.jpg")
-            frame_count += 1
-
-            if frame_count % 100 == 0:  # 100フレームごとにログを出力
-                logger.info(f"Processed {frame_count} frames")
-
-            # 'q'を押して終了
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                logger.info("Quit signal received")
-                break
-
-        self.release()
-        cv2.destroyAllWindows()
-        logger.info("Camera loop ended")
