@@ -1,3 +1,4 @@
+import os
 import boto3
 from PIL import Image
 from typing import TypedDict, List
@@ -21,7 +22,11 @@ class CustomLabelResponse(TypedDict):
 
 class Rekognition:
     def __init__(self):
-        self.client = boto3.client("rekognition")
+        self.client = boto3.client(
+            "rekognition",
+            aws_access_key_id=os.environ["ACCESS_KEY"],
+            aws_secret_access_key=os.environ["SECRET_KEY"],
+        )
 
     def start_model(
         self,
